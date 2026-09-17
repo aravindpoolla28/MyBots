@@ -215,7 +215,7 @@ def get_atm_instruments(all_instruments, current_price, expiry_ts):
 
 
 def get_weekly_implied_move_range(all_instruments, current_price, weekly_expiry_timestamps, ticker_cache):
-    """Calculate a 1SD implied move range for the latest weekly expiry using ATM IV,
+    """Calculate a 1 standard deviation implied move range for the latest weekly expiry using ATM IV,
     reading mark_iv from the shared ticker_cache instead of re-fetching."""
     if not weekly_expiry_timestamps:
         return "N/A"
