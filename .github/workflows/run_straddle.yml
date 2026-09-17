@@ -42,6 +42,35 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
       
+          FILES=()
+          for f in \
+            "./ohlcv_cache.csv" \
+            "./ohlcv_cache_meta.json" \
+            "./premium_cache.json" \
+            "./mtm_cache.json" \
+            "./run_history.jsonl"
+          do
+            if [ -f "$f" ]; then
+              FILES+=("$f")
+            fi
+          done
+      
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "No cache files found. Nothing to commit."
+            exit 0
+          fi
+      
+          git add -f "${FILES[@]}"
+      
+          if git diff --cached --quiet; then
+            echo "No cache updates to commit."
+          else
+            git commit -m "Update straddle cache data"
+            git push
+          fi        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      
           echo "Listing cache files..."
           find . -maxdepth 2 \( \
             -name "ohlcv_cache.csv" -o \
