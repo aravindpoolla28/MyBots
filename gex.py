@@ -13,8 +13,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from io import BytesIO
 
-TELEGRAM_BOT_TOKEN = ${{ secrets.TELEGRAM_BOT_TOKEN }}
-TELEGRAM_CHAT_ID = ${{ secrets.TELEGRAM_CHAT_ID }}
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 # define in the code num_expiries
 # define in the code: price_range (spot +/- price_range, used for the GEX table/strings)
