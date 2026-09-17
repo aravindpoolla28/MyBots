@@ -1,0 +1,57 @@
+name: BTC Straddle Standalone
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 minutes
+
+jobs:
+  run-straddle:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install aiohttp numpy pandas matplotlib
+
+      - name: Run straddle script
+        run: |
+          python straddle.py
+
+      - name: Commit updated cache files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            "Algos/Straddle/ohlcv_cache.csv" \
+            "Algos/Straddle/ohlcv_cache_meta.json" \
+            "Algos/Straddle/premium_cache.json" \
+            "Algos/Straddle/mtm_cache.json" \
+            "Algos/Straddle/run_history.jsonl"
+
+          if git diff --cached --quiet; then
+            echo "No cache updates to commit."
+          else
+            git commit -m "Update straddle cache data"
+            git push
+          fi
