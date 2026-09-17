@@ -43,11 +43,11 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add \
-            "Algos/Straddle/ohlcv_cache.csv" \
-            "Algos/Straddle/ohlcv_cache_meta.json" \
-            "Algos/Straddle/premium_cache.json" \
-            "Algos/Straddle/mtm_cache.json" \
-            "Algos/Straddle/run_history.jsonl"
+            ain/ohlcv_cache.csv \
+            ain/ohlcv_cache_meta.json \
+            ain/premium_cache.json \
+            ain/mtm_cache.json \
+            ain/run_history.jsonl
 
           if git diff --cached --quiet; then
             echo "No cache updates to commit."
