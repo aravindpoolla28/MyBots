@@ -2,7 +2,7 @@ name: Run Hourly Script
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '*/15 * * * *'  # This instructs GitHub to run the script every 15 minutes
   workflow_dispatch:
 
 jobs:
