@@ -37,18 +37,40 @@ jobs:
         run: |
           python straddle.py
 
-      - name: Commit updated cache files
+      - name: Commit cache updates
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add \
-            ain/ohlcv_cache.csv \
-            ain/ohlcv_cache_meta.json \
-            ain/premium_cache.json \
-            ain/mtm_cache.json \
-            ain/run_history.jsonl
-
+      
+          echo "Listing cache files..."
+          find . -maxdepth 2 \( \
+            -name "ohlcv_cache.csv" -o \
+            -name "ohlcv_cache_meta.json" -o \
+            -name "premium_cache.json" -o \
+            -name "mtm_cache.json" -o \
+            -name "run_history.jsonl" \
+          \) -print
+      
+          FILES=()
+          for f in \
+            "ain/ohlcv_cache.csv" \
+            "ain/ohlcv_cache_meta.json" \
+            "ain/premium_cache.json" \
+            "ain/mtm_cache.json" \
+            "ain/run_history.jsonl"
+          do
+            if [ -f "$f" ]; then
+              FILES+=("$f")
+            fi
+          done
+      
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "No cache files found. Nothing to commit."
+            exit 0
+          fi
+      
+          git add -f "${FILES[@]}"
+      
           if git diff --cached --quiet; then
             echo "No cache updates to commit."
           else
