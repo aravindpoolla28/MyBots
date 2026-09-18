@@ -51,6 +51,18 @@ def fetch_ticker(instrument_name, retries=3, backoff_factor=2):
     for i in range(retries):
         try:
             resp = requests.get(url, headers=HEADERS, timeout=20)
+            if resp.status_code == 429:
+                wait_time = backoff_factor * (2 ** i)
+                print(
+                    f"WARNING: Rate limited while fetching ticker for {instrument_name} "
+                    f"(HTTP 429). Retrying in {wait_time}s. Attempt {i + 1}/{retries}"
+                )
+                if i < retries - 1:
+                    time.sleep(wait_time)
+                    continue
+                print(f"Final attempt failed for {instrument_name}. Returning empty result.")
+                return {}
+
             resp.raise_for_status()
             return resp.json().get('result', {})
         except requests.exceptions.RequestException as e:
@@ -72,9 +84,13 @@ def fetch_all_tickers(instrument_names):
     print(f"Fetching ticker data for {total} unique instruments concurrently (single pass)...")
     sys.stdout.flush()
 
-    # Max workers = 5 keeps requests well below the 20 req/s rate limit.
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {executor.submit(fetch_ticker, name): name for name in unique_names}
+    def fetch_ticker_with_delay(name):
+        time.sleep(0.05)
+        return fetch_ticker(name)
+
+    # Max workers = 3, with a short per-worker delay to keep requests within rate limits.
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {executor.submit(fetch_ticker_with_delay, name): name for name in unique_names}
         for idx, future in enumerate(as_completed(futures)):
             name = futures[future]
             cache[name] = future.result()
@@ -411,10 +427,9 @@ def main_gex_monitor():
         return
     print(f"Fetched BTC price: {current_price}")
 
-    price_range = 20000          # spot +/- this range drives the GEX table / GEX strings
-    chart_price_range = 10000    # spot +/- this range drives ONLY the bar chart x-axis
+    price_range = 20000
+    chart_price_range = 10000
 
-    # --- Pure filtering over already-fetched instrument list (no API calls) ---
     filtered_inst, _, table_strikes, string_strikes = get_target_expiries_and_instruments(
         all_instruments, current_price, price_range=price_range
     )
@@ -428,16 +443,12 @@ def main_gex_monitor():
         print("No instruments in range.")
         return
 
-    # ATM legs needed for the weekly implied-move calc and the ATM straddle premium.
-    # These almost always overlap with filtered_inst/weekly_instruments already, but we
-    # add them explicitly (and de-dupe below) so nothing is ever fetched twice OR missed.
     weekly_target_ts = max(weekly_expiry_timestamps) if weekly_expiry_timestamps else None
     weekly_atm_instruments = get_atm_instruments(all_instruments, current_price, weekly_target_ts)
 
     next_expiry_ts = get_next_expiry_timestamp(all_instruments, min_hours=3)
     straddle_atm_instruments = get_atm_instruments(all_instruments, current_price, next_expiry_ts)
 
-    # --- Build ONE de-duplicated instrument set and fetch each ticker exactly once ---
     combined_gex_map = {inst['instrument_name']: inst for inst in filtered_inst}
     for inst in weekly_instruments:
         combined_gex_map.setdefault(inst['instrument_name'], inst)
@@ -449,7 +460,6 @@ def main_gex_monitor():
 
     ticker_cache = fetch_all_tickers([inst['instrument_name'] for inst in all_needed_map.values()])
 
-    # --- Everything below is pure processing of the single ticker_cache fetched above ---
     print("Processing filtered strikes...")
     gex_data = calculate_gex_data(combined_gex_instruments, ticker_cache)
 
@@ -466,7 +476,6 @@ def main_gex_monitor():
         if exp in gex_data
     }
 
-    # --- GEX string for all expiries expiring this week ---
     print("Generating GEX string for all expiries expiring this week...")
     df_gex_this_week = pd.DataFrame(index=sorted(weekly_gex_subset.keys()), columns=weekly_string_strikes_sorted).apply(pd.to_numeric).fillna(0)
     for exp in sorted(weekly_gex_subset.keys()):
@@ -479,7 +488,6 @@ def main_gex_monitor():
     gex_values_list_this_week = [str(int(val)) for val in total_gex_series_this_week]
     this_week_final_str = ",".join(gex_values_list_this_week)
 
-    # --- Next-expiry ATM straddle premium (fixed 0-value bug + expiry label for A7) ---
     next_expiry_label = None
     if next_expiry_ts:
         next_expiry_label = datetime.fromtimestamp(next_expiry_ts // 1000, timezone.utc).strftime('%Y-%m-%d')
@@ -494,7 +502,6 @@ def main_gex_monitor():
 
     straddle_expiry_label = next_expiry_label if next_expiry_label else "N/A"
 
-    # --- GEX string for the next expiry only ---
     print("Generating GEX string for next expiry...")
     if next_expiry_label and next_expiry_label in gex_data:
         next_expiry_to_use = next_expiry_label
@@ -515,7 +522,6 @@ def main_gex_monitor():
     else:
         next_exp_final_str = "N/A"
 
-    # --- Generate chart (x-axis now spot +/- chart_price_range, not the full 50k-100k range) ---
     try:
         chart_lower = int((current_price - chart_price_range) // 1000 * 1000)
         chart_upper = int((current_price + chart_price_range) // 1000 * 1000)
