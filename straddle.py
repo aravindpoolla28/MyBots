@@ -9,6 +9,8 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple
+from dotenv import load_dotenv
+load_dotenv()  # This loads the variables from your .env file into os.environ
 
 import aiohttp
 import numpy as np
