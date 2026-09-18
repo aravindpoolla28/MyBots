@@ -1,0 +1,8 @@
+requests
+pandas
+numpy
+pytz
+matplotlib
+gspread
+oauth2client
+aiohttp
