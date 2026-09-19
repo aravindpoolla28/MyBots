@@ -418,6 +418,22 @@ def post_chart_to_telegram(bot_token, chat_id, image_bytes, content):
         print(f"ERROR: Failed to post GEX chart to Telegram: {e}")
 
 
+def send_telegram_code_message(bot_token, chat_id, text):
+    """Send a simple text message formatted as code to Telegram."""
+    try:
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            'chat_id': chat_id,
+            'text': f"`{text}`",
+            'parse_mode': 'Markdown'
+        }
+        resp = requests.post(url, data=payload, timeout=30)
+        resp.raise_for_status()
+        print("SUCCESS: Posted weekly GEX string to Telegram.")
+    except requests.exceptions.RequestException as e:
+        print(f"ERROR: Failed to post weekly GEX string to Telegram: {e}")
+
+
 # ==== Main Runner ====
 def main_gex_monitor():
     current_price = get_current_btc_price()
@@ -502,25 +518,12 @@ def main_gex_monitor():
 
     straddle_expiry_label = next_expiry_label if next_expiry_label else "N/A"
 
-    print("Generating GEX string for next expiry...")
-    if next_expiry_label and next_expiry_label in gex_data:
-        next_expiry_to_use = next_expiry_label
-    elif all_expiries_labels:
-        next_expiry_to_use = all_expiries_labels[0]
-    else:
-        next_expiry_to_use = None
-
-    if next_expiry_to_use:
-        df_gex_1_exp = pd.DataFrame(index=[next_expiry_to_use], columns=weekly_string_strikes_sorted).apply(pd.to_numeric).fillna(0)
-        for strike in weekly_string_strikes_sorted:
-            call_gex = gex_data.get(next_expiry_to_use, {}).get(strike, {}).get('call', 0)
-            put_gex = gex_data.get(next_expiry_to_use, {}).get(strike, {}).get('put', 0)
-            df_gex_1_exp.loc[next_expiry_to_use, strike] = call_gex - put_gex
-        total_gex_series_1_exp = df_gex_1_exp.sum(axis=0)
-        gex_values_list_1_exp = [str(int(val)) for val in total_gex_series_1_exp]
-        next_exp_final_str = ",".join(gex_values_list_1_exp)
-    else:
-        next_exp_final_str = "N/A"
+    this_week_metric_label = build_expiry_label(weekly_expiry_timestamps)
+    weekly_implied_move_str = get_weekly_implied_move_range(all_instruments, current_price, weekly_expiry_timestamps, ticker_cache)
+    gex_string_range_str = (
+        f"{min(weekly_string_strikes_sorted):,} to {max(weekly_string_strikes_sorted):,}"
+        if weekly_string_strikes_sorted else "N/A"
+    )
 
     try:
         chart_lower = int((current_price - chart_price_range) // 1000 * 1000)
@@ -532,13 +535,17 @@ def main_gex_monitor():
             datetime.strptime(exp, '%Y-%m-%d').date() for exp in weekly_expiry_labels
         ).strftime('%d-%m-%Y') if weekly_expiry_labels else 'N/A'
         chart_bytes = generate_gex_bar_chart(chart_total_gex_by_strike, current_price, expiry_date_str)
-        telegram_content = f"GEX bar chart for BTC strikes around {int(current_price):,} until {expiry_date_str}."
+
+        telegram_content = (
+            f"Spot: {int(current_price):,} | Expiry window: {this_week_metric_label}\n"
+            f"Implied move: {weekly_implied_move_str}, gex string for {gex_string_range_str} as follows:"
+        )
         post_chart_to_telegram(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, chart_bytes, telegram_content)
+
+        if this_week_final_str:
+            send_telegram_code_message(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, this_week_final_str)
     except Exception as e:
         print(f"ERROR: Failed to create or post weekly GEX chart to Discord: {e}")
-
-    this_week_metric_label = build_expiry_label(weekly_expiry_timestamps)
-    weekly_implied_move_str = get_weekly_implied_move_range(all_instruments, current_price, weekly_expiry_timestamps, ticker_cache)
 
     print("GEX Monitor update complete.")
 
