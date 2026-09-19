@@ -1694,8 +1694,9 @@ class StraddleVisualizer:
         anchor_price = rm.anchor_price
         implied_band = rm.starting_mv_price  # ≈ combined call+put breakeven width
 
-        signed_move_pct = ((rm.current_price - rm.anchor_price) / rm.anchor_price * 100) if rm.anchor_price > 0 else 0.0
-        move_col = C.GREEN if signed_move_pct >= 0 else C.RED
+        signed_move = rm.current_price - rm.anchor_price
+        signed_move_pct = ((signed_move) / rm.anchor_price * 100) if rm.anchor_price > 0 else 0.0
+        move_col = C.GREEN if signed_move >= 0 else C.RED
 
         if implied_band > 0:
             upper, lower = anchor_price + implied_band, anchor_price - implied_band
@@ -1724,16 +1725,11 @@ class StraddleVisualizer:
             ax.axhline(rm.window_high, color=C.GOLD, ls="--", lw=0.8, alpha=0.45)
             ax.axhline(rm.window_low,  color=C.GOLD, ls="--", lw=0.8, alpha=0.45)
 
-        signed_move_pct = ((rm.current_price - rm.anchor_price) / rm.anchor_price * 100) if rm.anchor_price > 0 else 0.0
-        move_col = C.GREEN if signed_move_pct >= 0 else C.RED
-        move_label = f"{signed_move_pct:+.2f}% from 17:30 IST"
+        move_label = f"${signed_move:+,.0f} from 17:30 IST"
         ax.annotate(move_label, (times[-1], prices[-1]), xytext=(8, 10), textcoords="offset points",
                     fontsize=8.2, weight="bold", color=move_col,
                     bbox=dict(boxstyle="round,pad=0.25", facecolor=C.BG_CARD, edgecolor=move_col, alpha=0.9))
 
-        ax.annotate(f"{signed_move_pct:+.2f}% from 17:30 IST", (times[-1], prices[-1]), xytext=(8, 10),
-                    textcoords="offset points", fontsize=8.2, weight="bold", color=move_col,
-                    bbox=dict(boxstyle="round,pad=0.25", facecolor=C.BG_CARD, edgecolor=move_col, alpha=0.9))
         ax.scatter([times[-1]], [prices[-1]], color=C.WHITE, s=70, edgecolors=C.ACCENT,
                    lw=1.5, zorder=10, label=f"Now ${rm.current_price:,.0f}")
 
@@ -1743,9 +1739,9 @@ class StraddleVisualizer:
             ax.text(0.02, 0.05, tag, transform=ax.transAxes, fontsize=8.5, weight="bold",
                     color=tag_col, bbox=dict(boxstyle="round,pad=0.3", facecolor=C.BG_CARD, alpha=0.85))
 
-        summary = (f"Move {signed_move_pct:+.2f}% | Anchor ${rm.anchor_price:,.0f} | Now ${rm.current_price:,.0f}"
+        summary = (f"Move ${signed_move:+,.0f} | Anchor ${rm.anchor_price:,.0f} | Now ${rm.current_price:,.0f}"
                    f" | Range ±${implied_band:,.0f}" if implied_band > 0 else
-                   f"Move {signed_move_pct:+.2f}% | Anchor ${rm.anchor_price:,.0f} | Now ${rm.current_price:,.0f}")
+                   f"Move ${signed_move:+,.0f} | Anchor ${rm.anchor_price:,.0f} | Now ${rm.current_price:,.0f}")
         ax.text(0.02, 0.92, summary, transform=ax.transAxes, fontsize=8.1, weight="bold",
                 color=C.WHITE, bbox=dict(boxstyle="round,pad=0.3", facecolor=C.BG_CARD, alpha=0.7))
 
