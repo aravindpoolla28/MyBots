@@ -6,3 +6,5 @@ matplotlib
 gspread
 oauth2client
 aiohttp
+websocket-client
+python-dotenv
