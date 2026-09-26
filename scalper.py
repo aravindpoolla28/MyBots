@@ -5,12 +5,13 @@ import sys
 import time
 import logging
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import deque
 import pandas as pd
 import requests
 import websocket
 from dotenv import load_dotenv
+import pytz
 
 # Load environment variables from .env file
 load_dotenv()
@@ -30,6 +31,9 @@ try:
     logger.addHandler(_file_handler)
 except Exception:
     pass  # if the filesystem is read-only or unavailable, just keep console logging
+
+# Track if initial status has been logged
+_initial_status_logged = False
 
 # ==========================================
 # CONFIGURATION PARAMETERS & TELEGRAM ENV
@@ -414,18 +418,20 @@ class PaperTrader:
 # MAIN EXECUTION ROUTINE
 # ==========================================
 def main():
-    global last_swing_low_alert_time, last_swing_high_alert_time
+    global last_swing_low_alert_time, last_swing_high_alert_time, _initial_status_logged
 
-    logger.info("================================================================================")
-    logger.info(f" 🟢 DELTA EXCHANGE ORDER FLOW ENGINE | SYMBOL: {SYMBOL}")
-    logger.info(f" ⚙️ SENSITIVITY CONFIG: CVD Delta Threshold = ±{ABSORPTION_DELTA_THRESHOLD} | Imb Ratio = {IMBALANCE_RATIO}x")
+    if not _initial_status_logged:
+        logger.info("================================================================================")
+        logger.info(f" 🟢 DELTA EXCHANGE ORDER FLOW ENGINE | SYMBOL: {SYMBOL}")
+        logger.info(f" ⚙️ SENSITIVITY CONFIG: CVD Delta Threshold = ±{ABSORPTION_DELTA_THRESHOLD} | Imb Ratio = {IMBALANCE_RATIO}x")
 
-    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
-        logger.info(" 📲 TELEGRAM NOTIFICATIONS: ENABLED")
-        send_telegram_notification(f"🟢 *Order Flow Bot Online*\nMonitoring `{SYMBOL}` on Delta Exchange India.")
-    else:
-        logger.info(" ⚠️ TELEGRAM NOTIFICATIONS: DISABLED (Missing env variables TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID)")
-    logger.info("================================================================================")
+        if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+            logger.info(" 📲 TELEGRAM NOTIFICATIONS: ENABLED")
+            send_telegram_notification(f"🟢 *Order Flow Bot Online*\nMonitoring `{SYMBOL}` on Delta Exchange India.")
+        else:
+            logger.info(" ⚠️ TELEGRAM NOTIFICATIONS: DISABLED (Missing env variables TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID)")
+        logger.info("================================================================================")
+        _initial_status_logged = True
 
     engine = OrderFlowEngine(SYMBOL)
     engine.start()
@@ -565,7 +571,8 @@ def main():
             # 4. Print Continuous Terminal Log
             remaining_sec = int(max(0, next_check_time - time.time()))
             mins, secs = divmod(remaining_sec, 60)
-            timestamp = datetime.now().strftime('%H:%M:%S')
+            ist = pytz.timezone('Asia/Kolkata')
+            timestamp = datetime.now(ist).strftime('%H:%M:%S IST')
 
             pos_str = "FLAT"
             if trader.position:
@@ -592,7 +599,7 @@ def main():
                 f"CVD: {cvd:+.2f} | Imb: {imbalance:.2f} | Pos: {pos_str} | "
                 f"Realized PnL: ${trader.cumulative_pnl:+.2f} | Unrealized: ${unrealized:+.2f} | "
                 f"Total PnL: ${total_pnl:+.2f} | Equity: ${equity:,.2f} | "
-                f"W/L: {trader.wins}/{trader.losses}{feed_flag} | Status: {trader.last_log}"
+                f"W/L: {trader.wins}/{trader.losses}{feed_flag}"
             )
 
             time.sleep(LOG_INTERVAL_SECONDS)
