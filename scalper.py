@@ -61,15 +61,10 @@ MIN_BOOK_DEPTH = 0.0              # Minimum combined bid+ask depth (top N levels
                                    # a liquidity floor (units = base asset, e.g. BTC).
 
 LOG_INTERVAL_SECONDS = 5  # Terminal refresh rate
-TOUCH_COOLDOWN_SEC = 60   # Seconds to pause Telegram touch alerts to avoid spamming
 
 WS_RECONNECT_DELAY_SEC = 3   # Backoff before reconnecting a dropped websocket
 WS_PING_INTERVAL_SEC = 20
 WS_PING_TIMEOUT_SEC = 10
-
-# Tracking last alert timestamps to prevent spam
-last_swing_low_alert_time = 0.0
-last_swing_high_alert_time = 0.0
 
 # ==========================================
 # TELEGRAM NOTIFICATION HELPER
@@ -418,7 +413,7 @@ class PaperTrader:
 # MAIN EXECUTION ROUTINE
 # ==========================================
 def main():
-    global last_swing_low_alert_time, last_swing_high_alert_time, _initial_status_logged
+    global _initial_status_logged
 
     if not _initial_status_logged:
         logger.info("================================================================================")
@@ -426,8 +421,7 @@ def main():
         logger.info(f" ⚙️ SENSITIVITY CONFIG: CVD Delta Threshold = ±{ABSORPTION_DELTA_THRESHOLD} | Imb Ratio = {IMBALANCE_RATIO}x")
 
         if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
-            logger.info(" 📲 TELEGRAM NOTIFICATIONS: ENABLED")
-            send_telegram_notification(f"🟢 *Order Flow Bot Online*\nMonitoring `{SYMBOL}` on Delta Exchange India.")
+            logger.info(" 📲 TELEGRAM NOTIFICATIONS: ENABLED (Active only on paper trade execution/close)")
         else:
             logger.info(" ⚠️ TELEGRAM NOTIFICATIONS: DISABLED (Missing env variables TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID)")
         logger.info("================================================================================")
@@ -492,28 +486,6 @@ def main():
                         stop_loss = swing_low * 1.002
                         reason_str = "Aggressive Breakdown Continuation (SHORT)"
 
-                    # Telegram Diagnostic Audit Dispatcher for Swing Low Touch
-                    if (now - last_swing_low_alert_time) > TOUCH_COOLDOWN_SEC:
-                        trade_status = f"✅ *PAPER TRADE EXECUTED ({signal})*" if signal else "❌ *NO TRADE EXECUTED*"
-
-                        audit_msg = (
-                            f"📍 *SWING LOW TOUCHED AUDIT*\n\n"
-                            f"*Symbol:* `{SYMBOL}`\n"
-                            f"*Current Price:* `${current_price:.2f}`\n"
-                            f"*Swing Low Level:* `${swing_low:.2f}`\n\n"
-                            f"📊 *Market Flow Snapshot:*\n"
-                            f"• CVD: `{cvd:+.2f}` (Target: `<-{ABSORPTION_DELTA_THRESHOLD:.0f}`)\n"
-                            f"• Imbalance: `{imbalance:.2f}x` (Abs Target: `>{IMBALANCE_RATIO:.1f}x` | Bk Target: `<{1/IMBALANCE_RATIO:.2f}x`)\n\n"
-                            f"📋 *Criteria Audit:*\n"
-                            f"• Price <= Swing Low: {'✅ PASS' if c_price_low else '❌ FAIL'}\n"
-                            f"• Reversal CVD (<-750): {'✅ PASS' if c_cvd_abs_low else '❌ FAIL'}\n"
-                            f"• Reversal Imbalance (>4.0x): {'✅ PASS' if c_imb_abs_low else '❌ FAIL'}\n"
-                            f"• Breakdown Imbalance (<0.25x): {'✅ PASS' if c_imb_bk_low else '❌ FAIL'}\n\n"
-                            f"*Result:* {trade_status}"
-                        )
-                        send_telegram_notification(audit_msg)
-                        last_swing_low_alert_time = now
-
                 # Check if price is interacting with Swing High (within 0.05% or above)
                 elif swing_high > 0.0 and current_price >= (swing_high * 0.9995):
                     # Condition evaluations for Swing High
@@ -533,28 +505,6 @@ def main():
                         signal = "BUY"
                         stop_loss = swing_high * 0.998
                         reason_str = "Aggressive Breakout Continuation (LONG)"
-
-                    # Telegram Diagnostic Audit Dispatcher for Swing High Touch
-                    if (now - last_swing_high_alert_time) > TOUCH_COOLDOWN_SEC:
-                        trade_status = f"✅ *PAPER TRADE EXECUTED ({signal})*" if signal else "❌ *NO TRADE EXECUTED*"
-
-                        audit_msg = (
-                            f"📍 *SWING HIGH TOUCHED AUDIT*\n\n"
-                            f"*Symbol:* `{SYMBOL}`\n"
-                            f"*Current Price:* `${current_price:.2f}`\n"
-                            f"*Swing High Level:* `${swing_high:.2f}`\n\n"
-                            f"📊 *Market Flow Snapshot:*\n"
-                            f"• CVD: `{cvd:+.2f}` (Target: `>{ABSORPTION_DELTA_THRESHOLD:.0f}`)\n"
-                            f"• Imbalance: `{imbalance:.2f}x` (Abs Target: `<{1/IMBALANCE_RATIO:.2f}x` | Bk Target: `>{IMBALANCE_RATIO:.1f}x`)\n\n"
-                            f"📋 *Criteria Audit:*\n"
-                            f"• Price >= Swing High: {'✅ PASS' if c_price_high else '❌ FAIL'}\n"
-                            f"• CVD Threshold (>+750): {'✅ PASS' if c_cvd_abs_high else '❌ FAIL'}\n"
-                            f"• Reversal Imbalance (<0.25x): {'✅ PASS' if c_imb_abs_high else '❌ FAIL'}\n"
-                            f"• Breakout Imbalance (>4.0x): {'✅ PASS' if c_imb_bk_high else '❌ FAIL'}\n\n"
-                            f"*Result:* {trade_status}"
-                        )
-                        send_telegram_notification(audit_msg)
-                        last_swing_high_alert_time = now
 
                 if signal:
                     trader.execute_signal(
